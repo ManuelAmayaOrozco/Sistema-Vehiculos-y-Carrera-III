@@ -15,7 +15,7 @@ class Carrera(
 ) {
     private val historialAcciones = mutableMapOf<String, MutableList<String>>()
     private var estadoCarrera = false // Indica si la carrera está en curso o ha finalizado.
-    private val posiciones = mutableMapOf<String, Float>()
+    private var paradasRepostaje: MutableList<Pair<String, Int>> = mutableListOf<Pair<String, Int>>() //Nueva lista que contará las paradas de repostaje de cada vehículo
 
     init {
         require(distanciaTotal >= 1000) { "La distancia total de la carrera debe ser al menos 1000 km." }
@@ -24,6 +24,7 @@ class Carrera(
 
     companion object {
         private const val KM_PARA_FILIGRANA = 20f // Cada 20 km, se realiza una filigrana.
+        private const val RONDAS_PARA_PARCIAL = 3 //Cada cuantas rondas se hará una clasificación parcial
     }
 
     /**
@@ -54,7 +55,7 @@ class Carrera(
      * distancia total, participantes, estado actual, historial de acciones y posiciones de los vehículos participantes.
      */
     override fun toString(): String {
-        return "NombreCarrera: $nombreCarrera, DistanciaTotal: $distanciaTotal, Participantes: $participantes, EstadoCarrera: $estadoCarrera, HistorialAcciones: $historialAcciones, Posiciones: $posiciones." }
+        return "NombreCarrera: $nombreCarrera, DistanciaTotal: $distanciaTotal, Participantes: $participantes, EstadoCarrera: $estadoCarrera, HistorialAcciones: $historialAcciones" }
 
     /**
      * Inicializa los datos de un participante en la carrera, preparando su historial de acciones y estableciendo
@@ -64,7 +65,7 @@ class Carrera(
      */
     private fun inicializaDatosParticipante(vehiculo: Vehiculo) {
         historialAcciones[vehiculo.nombre] = mutableListOf()
-        posiciones[vehiculo.nombre] = 0f
+        paradasRepostaje.add(Pair(vehiculo.nombre, 0)) //Inicialización de las paradas de todos los vehiculos a 0.
     }
 
     /**
@@ -72,6 +73,13 @@ class Carrera(
      * alcanza o supera la distancia total de la carrera, determinando así el ganador.
      */
     fun iniciarCarrera() {
+
+        val listaNoGanadores = participantes.toMutableList() //Lista auxiliar de todos los participantes, irá decreciendo conforme lleguen a la meta.
+
+        var ronda = 0 //Iteración/Ronda actual.
+
+        var llegadaMeta = 0 //Cantidad de veces que se ha llegado a la meta.
+
         println("¡Comienza la carrera!")
 
         estadoCarrera = true // Indica que la carrera está en curso.
@@ -80,14 +88,30 @@ class Carrera(
             Thread.sleep(100)
             print(".")
 
-            val vehiculoSeleccionado = seleccionaVehiculoQueAvanzara()
+            ronda++
+
+            val vehiculoSeleccionado = seleccionaVehiculoQueAvanzara(listaNoGanadores) //Ahora la función llama a la listaNoGanadores para elegir desde esta y que no aparezcan vehiculos que ya han pasado la meta.
             avanzarVehiculo(vehiculoSeleccionado)
 
-            val vehiculoGanador = determinarGanador()
+            if ((ronda % RONDAS_PARA_PARCIAL) == 0) {
+                clasificacionParcial(ronda)
+            }
+
+            val vehiculoGanador = determinarGanador(listaNoGanadores) //Ahora la función llama a la listaNoGanadores para elegir desde esta y que no aparezcan vehiculos que ya han pasado la meta.
             if (vehiculoGanador != null) {
-                estadoCarrera = false
-                println("\n¡Carrera finalizada!")
-                println("\n¡¡¡ENHORABUENA ${vehiculoGanador.nombre}!!!\n")
+                llegadaMeta++
+                listaNoGanadores.remove(vehiculoGanador)
+                if (llegadaMeta == 1) {
+                    println("\n¡¡¡ENHORABUENA ${capitalize(vehiculoGanador.nombre)}!!!\n")
+                }
+                else if (llegadaMeta == participantes.size) {
+                    estadoCarrera = false
+                    println("\n¡Ha llegado ${capitalize(vehiculoGanador.nombre)} a la meta!\n")
+                    println("\n¡Carrera finalizada!")
+                }
+                else {
+                    println("\n¡Ha llegado ${capitalize(vehiculoGanador.nombre)} a la meta!\n")
+                }
             }
 
         }
@@ -99,7 +123,7 @@ class Carrera(
      *
      * @return El [Vehiculo] seleccionado para avanzar.
      */
-    private fun seleccionaVehiculoQueAvanzara() = participantes.random()
+    private fun seleccionaVehiculoQueAvanzara(listaNoGanadores: List<Vehiculo>) = listaNoGanadores.random()
 
     /**
      * Calcula el número de tramos o segmentos en los que se divide la distancia que un vehículo intenta recorrer.
@@ -147,12 +171,10 @@ class Carrera(
 
             avanzarTramo(vehiculo, distanciaDeTramo)
             distanciaRestanteEnAvance -= distanciaDeTramo
-            repeat(2) { realizarFiligrana(vehiculo) }
+            repeat((0..3).random()) { realizarFiligrana(vehiculo) } //Realizar 0 a 3 filigranas aleatoriamente
         }
 
         registrarAccion(vehiculo.nombre, "Finaliza viaje: Total Recorrido $distanciaTotalEnAvance kms (${vehiculo.kilometrosActuales} kms y ${vehiculo.combustibleActual} L actuales)")
-
-        actualizarPosiciones(vehiculo.nombre, distanciaTotalEnAvance)
     }
 
     /**
@@ -170,6 +192,7 @@ class Carrera(
         // Si le queda alguna distancia por recorrer debe repostar
         while (distanciaRestante > 0) {
             val repostado = vehiculo.repostar() // Llenamos el tanque
+            actualizarParadas(vehiculo) //Actualizamos la cantidad de paradas de este vehiculo.
             registrarAccion(vehiculo.nombre, "Repostaje tramo: $repostado L")
 
             // Necesitamos de nuevo una distancia para después compararla con la distanciaRestante que devuelve realizarViaje()
@@ -198,27 +221,18 @@ class Carrera(
         // Lógica para realizar filigranas de motociletas y automovil y registrarlas. Se hará o no aleatoriamente.
         if (comprobarSiTocaHacerFiligrana()) {
             val combustibleRestante: Float
+            val retrasoKm = ((10..50).random()).toFloat() //Kilometros que serán restados tras hacer la filigrana.
 
             if (vehiculo is Automovil) {
                 combustibleRestante = vehiculo.realizaDerrape()
-                registrarAccion(vehiculo.nombre, "Derrape: Combustible restante $combustibleRestante L.")
+                vehiculo.kilometrosActuales -= retrasoKm
+                registrarAccion(vehiculo.nombre, "Derrape: Combustible restante $combustibleRestante L. Retraso de ${retrasoKm}km")
             } else if (vehiculo is Motocicleta) {
                 combustibleRestante = vehiculo.realizaCaballito()
-                registrarAccion(vehiculo.nombre, "Caballito: Combustible restante $combustibleRestante L")
+                vehiculo.kilometrosActuales -= retrasoKm
+                registrarAccion(vehiculo.nombre, "Caballito: Combustible restante $combustibleRestante L. Retraso de ${retrasoKm}km")
             }
         }
-    }
-
-    /**
-     * Actualiza la posición de un vehículo en la carrera, sumando la distancia recorrida en el último tramo
-     * a su total acumulado.
-     *
-     * @param nombreVehiculo El nombre del [Vehiculo] cuya posición se actualizará.
-     * @param kilometraje La distancia recorrida en el último tramo.
-     */
-    private fun actualizarPosiciones(nombreVehiculo: String, kilometraje: Float) {
-        val kilometrosRecorridos = posiciones[nombreVehiculo] ?: 0f
-        posiciones[nombreVehiculo] = kilometrosRecorridos + kilometraje
     }
 
     /**
@@ -227,12 +241,13 @@ class Carrera(
      *
      * @return El [Vehiculo] ganador, si existe; de lo contrario, devuelve null.
      */
-    private fun determinarGanador(): Vehiculo? {
-        val maxKilometros = posiciones.maxByOrNull { it.value }
+    private fun determinarGanador(listaNoGanadores: List<Vehiculo>): Vehiculo? {
         var ganador: Vehiculo? = null
 
-        if ((maxKilometros?.value ?: 0f) >= distanciaTotal)
-            ganador = participantes.find { it.nombre == maxKilometros?.key }
+        for (vehiculo in listaNoGanadores) {
+            if (vehiculo.kilometrosActuales >= distanciaTotal)
+                ganador = vehiculo
+        }
 
         return ganador
     }
@@ -257,23 +272,66 @@ class Carrera(
     fun obtenerResultados(): List<ResultadoCarrera> {
         val resultados = mutableListOf<ResultadoCarrera>()
 
-        posiciones.toList().sortedByDescending { it.second }.forEachIndexed { posicion, (nombre, kilometraje) ->
-            val vehiculo = participantes.find { it.nombre == nombre }
-            val paradasRepostaje = historialAcciones[nombre]?.count { it.contains("Repostaje") } ?: 0
-            val historial = historialAcciones[nombre] ?: emptyList()
+        val posiciones = participantes.sortedByDescending { it.kilometrosActuales }
 
-            if (vehiculo != null)
-                resultados.add(
-                    ResultadoCarrera(
-                        vehiculo,
-                        posicion + 1,
-                        kilometraje,
-                        paradasRepostaje,
-                        historial
-                    )
+        var posicion = 1 //Contador de posiciones que aumenta conforme se añaden los resultados.
+
+        for (vehiculo in posiciones) {
+
+            val paradasRepostaje = (paradasRepostaje.find { it.first == vehiculo.nombre })!!.second
+            val historial = historialAcciones[vehiculo.nombre] ?: emptyList()
+
+            resultados.add(
+                ResultadoCarrera(
+                    vehiculo,
+                    posicion,
+                    vehiculo.kilometrosActuales,
+                    paradasRepostaje,
+                    historial
                 )
+            )
+
+            posicion++
         }
+
         return resultados
+    }
+
+
+    /**
+     * Función que muestra una clasificación parcial de la carrera tras cierto número de rondas.
+     *
+     * @param ronda La ronda/iteración cuando toma lugar la clasificación parcial.
+     */
+    private fun clasificacionParcial(ronda: Int) {
+
+        val posiciones = participantes.sortedByDescending { it.kilometrosActuales }
+
+        println()
+        println("*** CLASIFICACIÓN PARCIAL (ronda $ronda) ***")
+        println()
+
+        var count = 1
+        for (vehiculo in posiciones) {
+            println("$count ${vehiculo.obtenerInformacion()}")
+            count++
+        }
+    }
+
+
+    /**
+     * Función que actualiza el número de paradas de repostaje de un vehículo.
+     *
+     * @param vehiculo El vehículo que será actualizado.
+     */
+    private fun actualizarParadas(vehiculo: Vehiculo) {
+        val encVehiculo = paradasRepostaje.find { it.first == vehiculo.nombre }
+        val posVehiculo = paradasRepostaje.indexOfFirst { it.first == vehiculo.nombre }
+        var paradasActuales = encVehiculo?.second
+        paradasActuales = paradasActuales!! + 1
+        if (encVehiculo != null) {
+            paradasRepostaje[posVehiculo] = Pair(encVehiculo.first, paradasActuales)
+        }
     }
 
 }

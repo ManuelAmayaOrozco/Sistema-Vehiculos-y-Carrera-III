@@ -1,3 +1,5 @@
+import kotlin.reflect.typeOf
+
 /**
  * Representa un vehículo genérico con propiedades básicas y funcionalidades para calcular la autonomía, realizar viajes,
  * y repostar combustible.
@@ -43,7 +45,7 @@ open class Vehiculo(
      * @return Una cadena de texto que representa al vehiculo.
      */
     override fun toString(): String {
-        return "Vehículo: $nombre, Marca: $marca, Modelo: $modelo, Kilómetros Actuales: $kilometrosActuales, Combustible Actual: $combustibleActual L."
+        return "Vehículo: ${capitalize(nombre)}, Marca: $marca, Modelo: $modelo, Kilómetros Actuales: $kilometrosActuales, Combustible Actual: $combustibleActual L."
     }
 
     /**
@@ -57,12 +59,13 @@ open class Vehiculo(
     }
 
     /**
-     * Devuelve una cadena de texto con la información de los kilómetros que puede recorrer el vehículo.
+     * Devuelve una cadena de texto con la información actual de los kilómetros recorridos del vehículo y su
+     * combustible actual.
      *
      * @return Una cadena de texto que representa la información del vehículo.
      */
-    fun obtenerInformacion(): String {
-        return calcularAutonomia().toString()
+    open fun obtenerInformacion(): String {
+        return "${capitalize(nombre)} Vehículo(km = ${kilometrosActuales.redondear(2)}, combustible = ${combustibleActual.redondear(2)} L)"
     }
 
     /**

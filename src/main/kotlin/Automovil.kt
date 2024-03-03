@@ -4,14 +4,14 @@
  * @property esHibrido Indica si el automóvil es eléctrico (true) o no (false).
  * @constructor Crea un automóvil con los parámetros especificados, heredando propiedades y funcionalidades de [Vehiculo].
  */
-class Automovil(
+open class Automovil(
     nombre: String,
     marca: String,
     modelo: String,
     capacidadCombustible: Float,
     combustibleActual: Float,
     kilometrosActuales: Float,
-    private val esHibrido: Boolean
+    val esHibrido: Boolean
 ) : Vehiculo(nombre, marca, modelo, capacidadCombustible, combustibleActual, kilometrosActuales) {
 
     companion object {
@@ -34,7 +34,7 @@ class Automovil(
      * Calcula y devuelve la autonomía del automóvil en kilómetros. Si el automóvil es eléctrico,
      * se ajusta la eficiencia de combustible restando el ahorro eléctrico.
      *
-     * @return La autonomía del automóvil en kilómetros como [Int].
+     * @return La autonomía del automóvil en kilómetros como [Float].
      */
     override fun calcularAutonomia() =
         if (esHibrido)
@@ -75,12 +75,22 @@ class Automovil(
     }
 
     /**
+     * Devuelve una cadena de texto con la información actual de los kilómetros recorridos del vehículo y su
+     * combustible actual.
+     *
+     * @return Una cadena de texto que representa la información del vehículo.
+     */
+    override fun obtenerInformacion(): String {
+        return "${capitalize(nombre)} Automovil(km = ${kilometrosActuales.redondear(2)}, combustible = ${combustibleActual.redondear(2)} L)"
+    }
+
+    /**
      * Sobrescribe el método toString de la clase [Vehiculo] para proporcionar una representación en cadena de texto
      * específica del automóvil, incluyendo su estado de ser eléctrico además de los detalles heredados de Vehiculo.
      *
      * @return Una cadena de texto que representa al automóvil.
      */
     override fun toString(): String {
-        return "Automovil(nombre=$nombre, marca=$marca, modelo=$modelo, capacidadCombustible=$capacidadCombustible, combustibleActual=$combustibleActual, kilometrosActuales=$kilometrosActuales, esElectrico=$esHibrido)"
+        return "Automovil(nombre=${capitalize(nombre)}, marca=$marca, modelo=$modelo, capacidadCombustible=$capacidadCombustible, combustibleActual=$combustibleActual, kilometrosActuales=$kilometrosActuales, esElectrico=$esHibrido)"
     }
 }
